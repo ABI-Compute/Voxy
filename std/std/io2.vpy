@@ -1,9 +1,4 @@
-# ============================================================ #
-# VOX STANDARD LIBRARY (Vstdl) c Calam 2025                    #
-# This is the Vox standard library module for basic I/O        #
-# tasks like stdout, stdin, stderr, etc                        #
-# Currently under development                                  #
-# =============================================================#
+# Theoretical scketch of Voxy in the future (namespaces)
 
 
 lib dyn <kernel32.dll>
@@ -71,5 +66,6 @@ fn void err(msg: LPCSTR, code: int):
 endfn
 
 nmend
+
 
 # end of io.vpy
