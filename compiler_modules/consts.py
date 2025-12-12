@@ -1,0 +1,3 @@
+RED_ESCAPE = "\x1b[31m"
+GREEN_ESCAPE = "\x1b[32m"
+RESET_ESCAPE = "\x1b[0m"
