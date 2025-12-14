@@ -225,7 +225,7 @@ def parse_var(name: str, type_token: str, value: str) -> str:
             ctx.context.current_function
         )
         utils.AddToScope(
-            f"  store {llvm_type} {tmp}, {llvm_type}* %{name}\n",
+            f"    %{name} = load {llvm_type}, {llvm_type}* @{name}\n",
             ctx.context.current_function
         )
         return ""
@@ -303,7 +303,7 @@ def parseDynImport(line: str) -> str:
     return llvm_decl
 
 def help1(llvm_args, arg_name, arg_type, arg_val, scope, tmp):
-
+    print(f"HELP1: arg_name={arg_name}, arg_type={arg_type}, arg_val={arg_val}, scope={scope}, tmp={tmp}")
     fn = None
     arg_list = []
     
@@ -340,13 +340,21 @@ def parseFunctionCallS(line: str, retT="?") -> str:
     # -----------------------------
     func_name = line[:line.find("(")].strip()
     args_str = line[line.find("(") + 1:-1].strip()
-
-    if func_name not in ctx.context.functions:
+    syscall = False
+    if func_name.startswith("__syscall__"): syscall = True
+    if func_name not in ctx.context.functions and not syscall:
         errors.err(f"Unknown function: {func_name}")
         return ""
 
-    func_obj: Funtion = ctx.context.functions[func_name][0]
-    declare_only = ctx.context.functions[func_name][1]
+    func_obj = None
+    declare_only = False
+    if syscall:
+        declare_only = True
+        func_obj = Funtion(func_name, args={"num":"i64","arg1":"i64","arg2":"i64","arg3":"i64","arg4":"i64","arg5":"i64","arg6":"i64"}, ret_type="i64", body="")
+    else:
+        func_obj: Funtion = ctx.context.functions[func_name][0]
+        declare_only = ctx.context.functions[func_name][1]
+
     func_obj.MakeNonNone()
 
     # Safe argument splitter
@@ -384,7 +392,8 @@ def parseFunctionCallS(line: str, retT="?") -> str:
     # ================================================================
     for i, (arg_name, arg_type_vox) in enumerate(expected):
         arg_val = args[i]
-        arg_type = "i32"   # defualt
+        arg_type = "+"   # defualt
+        if arg_type_vox is None: continue
         if not ctx.context.current_function is None: 
             fn: Funtion = ctx.context.functions[ctx.context.current_function][0]
             if fn.is_arg(arg_val): arg_type = _types_.vox_type_to_llvm(fn.get_arg_Type(arg_val))
@@ -396,8 +405,10 @@ def parseFunctionCallS(line: str, retT="?") -> str:
         except:
             arg_type = arg_type_vox  # already llvm
 
-        if arg_type is None:
-            errors.FATAL(f"Type resolution failure for param '{arg_name}' in {func_name}")
+        if arg_type == "+": arg_type = arg_type_vox
+
+        if arg_type is None or arg_type == "+":
+            errors.FATAL(f"Type resolution failure for param '{arg_name}' in {func_name} because Vox type '{arg_type_vox}' could not be mapped to LLVM")
 
         # ------------------------------------------------------------
         # 1. String literal: addr "hello world"
@@ -430,7 +441,8 @@ def parseFunctionCallS(line: str, retT="?") -> str:
         # 3. null literal
         # ------------------------------------------------------------
         if arg_val == "null":
-            llvm_args.append(f"{arg_type} 0")
+            if arg_type.endswith("*"): llvm_args.append(f"{arg_type} null")
+            else: llvm_args.append(f"{arg_type} 0")
             continue
 
         # ------------------------------------------------------------
@@ -457,7 +469,11 @@ def parseFunctionCallS(line: str, retT="?") -> str:
         # ------------------------------------------------------------
         # 6. Raw literal (integer, number, etc.)
         # ------------------------------------------------------------
-        llvm_args.append(f"{arg_type} {arg_val}")
+        if _types_.is_literal(arg_val):
+            llvm_args.append(f"{arg_type} {arg_val}")
+            continue
+
+        llvm_args.append(f"{arg_type} %{arg_val}")
 
     # -----------------------------
     # Emit LLVM call
