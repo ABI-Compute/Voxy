@@ -9,17 +9,23 @@ import json
 # -------------------------
 # Operating System
 # -------------------------
+os_name = ""
 if os.name == "nt":
     ctx.context.ifdef_defs.append("WIN32")
+    os_name = "WIN32"
 elif os.name == "posix":
     if 'darwin' in sys.platform:   
         ctx.context.ifdef_defs.append("MAC")
+        os_name = "MAC"
     else:
         ctx.context.ifdef_defs.append("LINUX")
+        os_name = "LINUX"
 elif os.name == "sunos":
     ctx.context.ifdef_defs.append("SOLARIS")
+    os_name = "SOLARIS"
 elif os.name.startswith("bsd"):
     ctx.context.ifdef_defs.append("BSD")
+    os_name = "BSD"
 
 # -------------------------
 # CPU Architecture
@@ -63,25 +69,29 @@ def read_file(path: str) -> str:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        errors.err(f"Module '{path}' not found.")
+        print(f"File '{path}' not found.")
         return ""
 
 def process_global_import(module_name: str) -> str:
-    """Process a global import by reading from vox_path.json paths."""
+    """Process a global import by reading from vox_path.json paths with ifdefs."""
     try:
         with open("vox_path.json", "r", encoding="utf-8") as pf:
-            paths = json.load(pf)
+            paths_file = json.load(pf)
     except FileNotFoundError:
         errors.err("vox_path.json not found.")
         return ""
-
-    final_code = ""
-    for path in paths:
+    
+    code = ""
+    for_us = paths_file[os_name]
+    for path in for_us:
         full_path = os.path.join(path, module_name)
-        code = read_file(full_path)
-        if code:
-            final_code += PreProcess(code) + "\n"
-    return final_code
+        module_code = read_file(full_path)
+        if module_code:
+            code += module_code + "\n"
+        
+    if code == "": errors.err(f"Module '{module_name}' not found in vox_path.json paths because OS is {os_name}: {for_us}")
+    return code
+
 
 def process_local_import(module_name: str) -> str:
     """Process a local import by reading the file directly."""
@@ -189,6 +199,7 @@ def PreProcess(code: str) -> str:
         else:
             lpc += 1
         
+    print("Preprocessed code:\n", final)
     return final
  
 def handle_ifdef(condition: str) -> bool:
